@@ -366,41 +366,60 @@
       responseBox.style.display = "block";
       shareButton.style.display = "none";
 
-      // Try multiple CORS proxies
+      // Try multiple CORS proxies with timeouts
       const proxies = [
         `https://api.allorigins.win/get?url=${encodeURIComponent(`https://fam-official.serv00.net/sim/api.php?num=${number}`)}`,
-        `https://cors-anywhere.herokuapp.com/https://fam-official.serv00.net/sim/api.php?num=${number}`,
+        `https://corsproxy.io/?${encodeURIComponent(`https://fam-official.serv00.net/sim/api.php?num=${number}`)}`,
         `https://fam-official.serv00.net/sim/api.php?num=${number}`
       ];
 
       let apiData = null;
-      let lastError = null;
 
       for (const url of proxies) {
         try {
+          // Create a timeout promise
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 8000);
+
           const res = await fetch(url, {
             method: 'GET',
             headers: {
-              'Accept': 'application/json'
-            }
+              'Accept': 'application/json',
+              'User-Agent': 'Mozilla/5.0'
+            },
+            signal: controller.signal
           });
 
-          if (!res.ok) continue;
+          clearTimeout(timeoutId);
+
+          if (!res.ok) {
+            console.log(`Proxy ${url} failed with status ${res.status}`);
+            continue;
+          }
 
           const data = await res.json();
           
           // Handle allorigins response
           if (data.contents) {
-            apiData = JSON.parse(data.contents);
-          } else {
+            try {
+              apiData = JSON.parse(data.contents);
+            } catch (e) {
+              console.log("Failed to parse allorigins contents");
+              continue;
+            }
+          } else if (data.status === "success" || (Array.isArray(data.data) && data.data.length > 0)) {
             apiData = data;
+          } else if (data.status === "error") {
+            apiData = data;
+            break;
           }
 
-          if (apiData && apiData.status === "success") {
+          if (apiData && (apiData.status === "success" || Array.isArray(apiData.data))) {
+            console.log("Successfully fetched data from proxy:", url);
             break;
           }
         } catch (e) {
-          lastError = e;
+          console.log(`Error with proxy ${url}:`, e.message);
           continue;
         }
       }
@@ -420,10 +439,23 @@
           responseBox.innerText = content;
           shareButton.style.display = "inline-block";
         } else if (apiData && apiData.status === "error") {
-          responseBox.innerHTML = `<div style="color: #0f0; font-weight: bold;">>> ERROR: ${apiData.message || "DATA NOT FOUND"}</div>`;
+          responseBox.innerHTML = `<div style="color: #ff6b6b; font-weight: bold;">>> ERROR: ${apiData.message || "DATA NOT FOUND"}</div>`;
           shareButton.style.display = "none";
+        } else if (apiData && Array.isArray(apiData.data) && apiData.data.length > 0) {
+          const user = apiData.data[0];
+          const content = `
+> DATABASE ENTRY FOUND
+> -------------------
+📞 MOBILE: ${user.Mobile || "NOT FOUND"}
+👤 NAME: ${user.Name || "NOT FOUND"}
+🆔 CNIC: ${user.CNIC || "NOT FOUND"}
+📍 ADDRESS: ${user.Address || "NOT FOUND"}
+📶 OPERATOR: ${user.Operator || "NOT FOUND"}
+          `;
+          responseBox.innerText = content;
+          shareButton.style.display = "inline-block";
         } else {
-          responseBox.innerHTML = `<div style="color: #f00; font-weight: bold;">>> ERROR 404: DATABASE LOOKUP FAILED<br/>CHECK NUMBER OR TRY AGAIN</div>`;
+          responseBox.innerHTML = `<div style="color: #ff6b6b; font-weight: bold;">>> ⚠ DATABASE SERVICE TEMPORARILY UNAVAILABLE<br/>>>> PLEASE TRY AGAIN IN A FEW MOMENTS</div>`;
           shareButton.style.display = "none";
         }
       }, 1500);
