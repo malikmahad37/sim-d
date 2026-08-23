@@ -1,7 +1,6 @@
-// Mock SIM Database API
-// This is a demo API that returns simulated SIM holder data
+// SIM Database API - Real Working Database
+// You can add more numbers here easily
 
-// Sample database with phone numbers
 const simDatabase = {
   "03086462372": {
     Mobile: "03086462372",
@@ -74,9 +73,12 @@ export default function handler(req, res) {
 
   // Normalize the phone number
   const normalizedNum = num.replace(/[^\d]/g, '');
-  const formattedNum = '0' + normalizedNum.slice(-10);
+  let formattedNum = '0' + normalizedNum.slice(-10);
+  
+  // Also check without leading 0
+  const numWithoutZero = normalizedNum.slice(-10);
 
-  // Check if number exists in database
+  // Check database first
   if (simDatabase[formattedNum]) {
     return res.status(200).json({
       status: "success",
@@ -84,33 +86,16 @@ export default function handler(req, res) {
     });
   }
 
-  // Generate random data for demo purposes (numbers not in database)
-  const names = ["ALICE JOHNSON", "BOB SMITH", "CHARLIE BROWN", "DIANA PRINCE", "EVE MARTIN"];
-  const operators = ["ZONG", "JAZZ", "TELENOR", "UFONE"];
-  const cities = ["KARACHI", "LAHORE", "ISLAMABAD", "RAWALPINDI", "MULTAN", "PESHAWAR", "QUETTA"];
-
-  if (req.method === 'GET') {
-    const randomName = names[Math.floor(Math.random() * names.length)];
-    const randomOperator = operators[Math.floor(Math.random() * operators.length)];
-    const randomCity = cities[Math.floor(Math.random() * cities.length)];
-    const randomCNIC = Math.floor(Math.random() * 90000) + 10000 + "-" + Math.floor(Math.random() * 9000000) + 1000000 + "-" + Math.floor(Math.random() * 9) + 1;
-
+  if (simDatabase['0' + numWithoutZero]) {
     return res.status(200).json({
       status: "success",
-      data: [
-        {
-          Mobile: formattedNum,
-          Name: randomName,
-          CNIC: randomCNIC,
-          Address: randomCity + ", PAKISTAN",
-          Operator: randomOperator
-        }
-      ]
+      data: [simDatabase['0' + numWithoutZero]]
     });
   }
 
-  return res.status(405).json({
+  // If not found in database, return error
+  return res.status(404).json({
     status: "error",
-    message: "Method not allowed"
+    message: "SIM data not found in database"
   });
 }
