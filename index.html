@@ -241,17 +241,49 @@
       responseBox.style.display = "block";
       shareButton.style.display = "none";
 
-      const url = `https://api.allorigins.win/get?url=${encodeURIComponent(`https://fam-official.serv00.net/sim/api.php?num=${number}`)}`;
+      // Try multiple CORS proxies
+      const proxies = [
+        `https://api.allorigins.win/get?url=${encodeURIComponent(`https://fam-official.serv00.net/sim/api.php?num=${number}`)}`,
+        `https://cors-anywhere.herokuapp.com/https://fam-official.serv00.net/sim/api.php?num=${number}`,
+        `https://fam-official.serv00.net/sim/api.php?num=${number}`
+      ];
 
-      try {
-        const res = await fetch(url);
-        const json = await res.json();
-        const apiData = JSON.parse(json.contents);
+      let apiData = null;
+      let lastError = null;
 
-        setTimeout(() => {
-          if (apiData.status === "success" && Array.isArray(apiData.data) && apiData.data.length > 0) {
-            const user = apiData.data[0];
-            const content = `
+      for (const url of proxies) {
+        try {
+          const res = await fetch(url, {
+            method: 'GET',
+            headers: {
+              'Accept': 'application/json'
+            }
+          });
+
+          if (!res.ok) continue;
+
+          const data = await res.json();
+          
+          // Handle allorigins response
+          if (data.contents) {
+            apiData = JSON.parse(data.contents);
+          } else {
+            apiData = data;
+          }
+
+          if (apiData && apiData.status === "success") {
+            break;
+          }
+        } catch (e) {
+          lastError = e;
+          continue;
+        }
+      }
+
+      setTimeout(() => {
+        if (apiData && apiData.status === "success" && Array.isArray(apiData.data) && apiData.data.length > 0) {
+          const user = apiData.data[0];
+          const content = `
 > DATABASE ENTRY FOUND
 > -------------------
 📞 MOBILE: ${user.Mobile || "NOT FOUND"}
@@ -259,20 +291,17 @@
 🆔 CNIC: ${user.CNIC || "NOT FOUND"}
 📍 ADDRESS: ${user.Address || "NOT FOUND"}
 📶 OPERATOR: ${user.Operator || "NOT FOUND"}
-            `;
-            responseBox.innerText = content;
-            shareButton.style.display = "inline-block";
-          } else {
-            responseBox.innerHTML = `<div style="color: #0f0; font-weight: bold;">>> ERROR 404: DATA NOT FOUND</div>`;
-            shareButton.style.display = "none";
-          }
-        }, 1500);
-      } catch (e) {
-        setTimeout(() => {
-          responseBox.innerHTML = `<div style="color: #f00; font-weight: bold;">>> SYSTEM ERROR: CONNECTION FAILED</div>`;
+          `;
+          responseBox.innerText = content;
+          shareButton.style.display = "inline-block";
+        } else if (apiData && apiData.status === "error") {
+          responseBox.innerHTML = `<div style="color: #0f0; font-weight: bold;">>> ERROR: ${apiData.message || "DATA NOT FOUND"}</div>`;
           shareButton.style.display = "none";
-        }, 1500);
-      }
+        } else {
+          responseBox.innerHTML = `<div style="color: #f00; font-weight: bold;">>> ERROR 404: DATABASE LOOKUP FAILED<br/>CHECK NUMBER OR TRY AGAIN</div>`;
+          shareButton.style.display = "none";
+        }
+      }, 1500);
     }
 
     function shareWhatsApp() {
