@@ -367,8 +367,8 @@
       shareButton.style.display = "none";
 
       try {
-        // Use external API endpoint
-        const apiUrl = `https://famofc.site/api/database.php?num=${encodeURIComponent(number)}`;
+        // Use local proxy API (proxies to famofc.site)
+        const apiUrl = `/api/sim?num=${encodeURIComponent(number)}`;
         
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -376,11 +376,9 @@
         const res = await fetch(apiUrl, {
           method: 'GET',
           headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
+            'Accept': 'application/json'
           },
-          signal: controller.signal,
-          mode: 'cors'
+          signal: controller.signal
         });
 
         clearTimeout(timeoutId);

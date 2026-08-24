@@ -1,52 +1,7 @@
-// SIM Database API - Real Working Database
-// You can add more numbers here easily
+// SIM Database API Proxy
+// Wraps famofc.site API and handles CORS/format issues
 
-const simDatabase = {
-  "03086462372": {
-    Mobile: "03086462372",
-    Name: "MALIK MAHAD",
-    CNIC: "12345-6789012-3",
-    Address: "ISLAMABAD, PAKISTAN",
-    Operator: "ZONG"
-  },
-  "03001234567": {
-    Mobile: "03001234567",
-    Name: "AHMED KHAN",
-    CNIC: "12341-6789012-1",
-    Address: "KARACHI, PAKISTAN",
-    Operator: "JAZZ"
-  },
-  "03215678901": {
-    Mobile: "03215678901",
-    Name: "FATIMA ALI",
-    CNIC: "12342-6789012-2",
-    Address: "LAHORE, PAKISTAN",
-    Operator: "ZONG"
-  },
-  "03324567890": {
-    Mobile: "03324567890",
-    Name: "HASSAN RAZA",
-    CNIC: "12343-6789012-3",
-    Address: "RAWALPINDI, PAKISTAN",
-    Operator: "TELENOR"
-  },
-  "03435123456": {
-    Mobile: "03435123456",
-    Name: "SARA AHMED",
-    CNIC: "12344-6789012-4",
-    Address: "MULTAN, PAKISTAN",
-    Operator: "JAZZ"
-  },
-  "03009876543": {
-    Mobile: "03009876543",
-    Name: "USMAN MALIK",
-    CNIC: "12345-6789012-5",
-    Address: "PESHAWAR, PAKISTAN",
-    Operator: "ZONG"
-  }
-};
-
-export default function handler(req, res) {
+export default async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -71,31 +26,73 @@ export default function handler(req, res) {
     });
   }
 
-  // Normalize the phone number
-  const normalizedNum = num.replace(/[^\d]/g, '');
-  let formattedNum = '0' + normalizedNum.slice(-10);
-  
-  // Also check without leading 0
-  const numWithoutZero = normalizedNum.slice(-10);
+  try {
+    // Call external API
+    const externalApiUrl = `https://famofc.site/api/database.php?num=${encodeURIComponent(num)}`;
+    
+    const response = await fetch(externalApiUrl, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0'
+      }
+    });
 
-  // Check database first
-  if (simDatabase[formattedNum]) {
+    if (!response.ok) {
+      console.error(`External API error: ${response.status}`);
+      return res.status(response.status).json({
+        status: "error",
+        message: `API returned status ${response.status}`
+      });
+    }
+
+    let apiData = await response.json();
+    
+    // Handle different response formats
+    if (typeof apiData === 'string') {
+      try {
+        apiData = JSON.parse(apiData);
+      } catch (e) {
+        return res.status(200).json({
+          status: "error",
+          message: "Invalid response format from API"
+        });
+      }
+    }
+
+    // If data is already an array, wrap it properly
+    if (Array.isArray(apiData)) {
+      return res.status(200).json({
+        status: "success",
+        data: apiData
+      });
+    }
+
+    // If it's an object with data property
+    if (apiData.data || apiData.status) {
+      return res.status(200).json(apiData);
+    }
+
+    // If it's a single object, wrap it in array
+    if (apiData.Mobile || apiData.mobile || apiData.Name || apiData.name) {
+      return res.status(200).json({
+        status: "success",
+        data: [apiData]
+      });
+    }
+
+    // If nothing matches, return success with the data as-is
     return res.status(200).json({
       status: "success",
-      data: [simDatabase[formattedNum]]
+      data: Array.isArray(apiData) ? apiData : [apiData]
+    });
+
+  } catch (error) {
+    console.error('Proxy error:', error.message);
+    
+    return res.status(500).json({
+      status: "error",
+      message: `Server error: ${error.message}`
     });
   }
-
-  if (simDatabase['0' + numWithoutZero]) {
-    return res.status(200).json({
-      status: "success",
-      data: [simDatabase['0' + numWithoutZero]]
-    });
-  }
-
-  // If not found in database, return error
-  return res.status(404).json({
-    status: "error",
-    message: "SIM data not found in database"
-  });
 }
